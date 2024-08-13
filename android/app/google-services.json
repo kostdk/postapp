@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "537923863518",
+    "project_id": "postapp-3b288",
+    "storage_bucket": "postapp-3b288.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:537923863518:android:efc8ad23c8a40d143bd34f",
+        "android_client_info": {
+          "package_name": "com.kost.postapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBV-BrAiw3oDwrDco8ZbMlwc3iKC53mWgU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
