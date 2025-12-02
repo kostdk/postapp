@@ -52,7 +52,7 @@ class _AccountScreenState extends State<AccountScreen> {
         });
 
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Profile photo updated!')));
+            .showSnackBar(const SnackBar(content: Text('Profile photo updated!')));
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Failed to upload image: $e')) );
@@ -66,7 +66,7 @@ class _AccountScreenState extends State<AccountScreen> {
 
     //navigator.pushNamedAndRemoveUntil('/home', (Route<dynamic> route) => false);
     navigator.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => AuthCheck()),
+      MaterialPageRoute(builder: (context) => const AuthCheck()),
       (Route<dynamic> route) => false,
     );
   }

@@ -75,7 +75,7 @@ class _SignUpScreen extends State<SignUpScreen> {
       }
     }
 
-    navigator.push(MaterialPageRoute(builder: (context)=> AuthCheck()));
+    navigator.push(MaterialPageRoute(builder: (context)=> const AuthCheck()));
   }
 
   @override

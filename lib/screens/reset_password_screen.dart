@@ -60,7 +60,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
     scaffoldMassager.showSnackBar(snackBar);
     
-    navigator.push(MaterialPageRoute(builder: (context)=> AuthCheck()));
+    navigator.push(MaterialPageRoute(builder: (context)=> const AuthCheck()));
   }
   
   @override

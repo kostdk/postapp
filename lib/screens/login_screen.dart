@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:email_validator/email_validator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/widgets.dart';
 import 'package:postapp/screens/home_screen.dart';
 import 'package:postapp/screens/reset_password_screen.dart';
 import 'package:postapp/screens/signup_screen.dart';
@@ -66,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     }
 
-    navigator.push(MaterialPageRoute(builder: (context)=> HomeScreen()));
+    navigator.push(MaterialPageRoute(builder: (context)=> const HomeScreen()));
   }
 
   @override
@@ -126,7 +125,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 30),
               TextButton(
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (context)=> SignUpScreen())),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (context)=> const SignUpScreen())),
                 child: Text(
                   'Register',
                   style:(AppStyle.mainContent)
@@ -135,7 +134,7 @@ class _LoginScreenState extends State<LoginScreen> {
               
               TextButton(
                 onPressed: () =>
-                  navigator.push(MaterialPageRoute(builder: (context)=> ResetPasswordScreen())),
+                  navigator.push(MaterialPageRoute(builder: (context)=> const ResetPasswordScreen())),
                 child: Text('Reset password',style:(AppStyle.mainContent)),
               ),
             ],
