@@ -1,24 +1,42 @@
 class NoteModel {
-  //int? id; // Необязательно, так как Firestore генерирует id автоматически
+  String id;
   String title;
   String body;
   DateTime creationDate;
+  int colorId;
+  DateTime? reminderDate;
 
-  NoteModel({required this.title, required this.body, required this.creationDate});
+  NoteModel({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.creationDate,
+    this.colorId = 0,
+    this.reminderDate,
+  });
 
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toMap(String userId) {
     return {
-      'title': title,
-      'body': body,
-      'creation_date': creationDate.toString(),
+      'id': id,
+      'user_id': userId,
+      'note_title': title,
+      'note_content': body,
+      'creation_date': creationDate.toIso8601String(),
+      'color_id': colorId,
+      'reminder_date': reminderDate?.toIso8601String(),
     };
   }
 
-  static NoteModel fromMap(Map<String, dynamic> map) {
+  factory NoteModel.fromMap(Map<String, dynamic> map) {
     return NoteModel(
-      title: map['title'],
-      body: map['body'],
+      id: map['id'],
+      title: map['note_title'],
+      body: map['note_content'],
       creationDate: DateTime.parse(map['creation_date']),
+      colorId: map['color_id'] ?? 0,
+      reminderDate: map['reminder_date'] != null
+          ? DateTime.parse(map['reminder_date'])
+          : null,
     );
   }
 }

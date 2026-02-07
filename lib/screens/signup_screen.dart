@@ -1,6 +1,6 @@
 import 'package:email_validator/email_validator.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:postapp/services/auth_check.dart';
 import 'package:postapp/services/snack_bar.dart';
 import 'package:postapp/style/app_style.dart';
@@ -14,18 +14,17 @@ class SignUpScreen extends StatefulWidget {
 
 class _SignUpScreen extends State<SignUpScreen> {
   bool isHiddenPassword = true;
-  TextEditingController emailTextInputController = TextEditingController();
-  TextEditingController passwordTextInputController = TextEditingController();
-  TextEditingController passwordTextRepeatInputController =
-      TextEditingController();
+  final TextEditingController emailTextInputController = TextEditingController();
+  final TextEditingController passwordTextInputController = TextEditingController();
+  final TextEditingController passwordTextRepeatInputController = TextEditingController();
   final formKey = GlobalKey<FormState>();
+  final supabase = Supabase.instance.client;
 
   @override
   void dispose() {
     emailTextInputController.dispose();
     passwordTextInputController.dispose();
     passwordTextRepeatInputController.dispose();
-
     super.dispose();
   }
 
@@ -41,41 +40,30 @@ class _SignUpScreen extends State<SignUpScreen> {
     final isValid = formKey.currentState!.validate();
     if (!isValid) return;
 
-    if (passwordTextInputController.text !=
-        passwordTextRepeatInputController.text) {
-      SnackBarService.showSnackBar(
-        context,
-        'Please enter same password',
-        true,
-      );
+    if (passwordTextInputController.text != passwordTextRepeatInputController.text) {
+      SnackBarService.showSnackBar(context, 'Passwords do not match', true);
       return;
     }
 
     try {
-      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      // Используем именованные параметры email и password
+      final response = await supabase.auth.signUp(
         email: emailTextInputController.text.trim(),
         password: passwordTextInputController.text.trim(),
       );
-    } on FirebaseAuthException catch (e) {
-      print(e.code);
 
-      if (e.code == 'email-already-in-use') {
-        SnackBarService.showSnackBar(
-          context,
-          'This e-mail already used, try again with another e-mail.',
-          true,
-        );
-        return;
-      } else {
-        SnackBarService.showSnackBar(
-          context,
-          'Unkwon error! Try again.',
-          true,
+      if (response.user != null) {
+        // Регистрация успешна — переходим на AuthCheck
+        navigator.pushReplacement(
+          MaterialPageRoute(builder: (_) => const AuthCheck()),
         );
       }
+    } on AuthException catch (e) {
+      // Ошибка регистрации
+      SnackBarService.showSnackBar(context, e.message, true);
+    } catch (e) {
+      SnackBarService.showSnackBar(context, 'Unexpected error: $e', true);
     }
-
-    navigator.push(MaterialPageRoute(builder: (context)=> const AuthCheck()));
   }
 
   @override
@@ -83,7 +71,7 @@ class _SignUpScreen extends State<SignUpScreen> {
     return Scaffold(
       resizeToAvoidBottomInset: false,
       appBar: AppBar(
-        title: Text('Sign up',style:(AppStyle.mainTitle)),
+        title: Text('Sign up', style: AppStyle.mainTitle),
       ),
       body: Padding(
         padding: const EdgeInsets.all(30.0),
@@ -92,7 +80,7 @@ class _SignUpScreen extends State<SignUpScreen> {
           child: Column(
             children: [
               TextFormField(
-                style:(AppStyle.mainContent),
+                style: AppStyle.mainContent,
                 keyboardType: TextInputType.emailAddress,
                 autocorrect: false,
                 controller: emailTextInputController,
@@ -103,12 +91,11 @@ class _SignUpScreen extends State<SignUpScreen> {
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
                   hintText: 'Enter e-mail',
-                  
                 ),
               ),
               const SizedBox(height: 30),
               TextFormField(
-                style:(AppStyle.mainContent),
+                style: AppStyle.mainContent,
                 autocorrect: false,
                 controller: passwordTextInputController,
                 obscureText: isHiddenPassword,
@@ -122,9 +109,7 @@ class _SignUpScreen extends State<SignUpScreen> {
                   suffix: InkWell(
                     onTap: togglePasswordView,
                     child: Icon(
-                      isHiddenPassword
-                          ? Icons.visibility_off
-                          : Icons.visibility,
+                      isHiddenPassword ? Icons.visibility_off : Icons.visibility,
                       color: Colors.black,
                     ),
                   ),
@@ -132,7 +117,7 @@ class _SignUpScreen extends State<SignUpScreen> {
               ),
               const SizedBox(height: 30),
               TextFormField(
-                style:(AppStyle.mainContent),
+                style: AppStyle.mainContent,
                 autocorrect: false,
                 controller: passwordTextRepeatInputController,
                 obscureText: isHiddenPassword,
@@ -146,9 +131,7 @@ class _SignUpScreen extends State<SignUpScreen> {
                   suffix: InkWell(
                     onTap: togglePasswordView,
                     child: Icon(
-                      isHiddenPassword
-                          ? Icons.visibility_off
-                          : Icons.visibility,
+                      isHiddenPassword ? Icons.visibility_off : Icons.visibility,
                       color: Colors.black,
                     ),
                   ),
@@ -157,18 +140,15 @@ class _SignUpScreen extends State<SignUpScreen> {
               const SizedBox(height: 30),
               ElevatedButton(
                 onPressed: signUp,
-                child: Center(child: Text('Sign up',style:(AppStyle.mainContent))),
+                child: Center(
+                  child: Text('Sign up', style: AppStyle.mainContent),
+                ),
               ),
               const SizedBox(height: 30),
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: Text(
-                  'Sign in',
-                
-                    style:(AppStyle.mainContent),
-                  ),
-                ),
-              
+                child: Text('Sign in', style: AppStyle.mainContent),
+              ),
             ],
           ),
         ),

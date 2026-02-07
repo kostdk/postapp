@@ -1,47 +1,53 @@
-import "package:cloud_firestore/cloud_firestore.dart";
-import "package:flutter/material.dart";
-import "package:intl/intl.dart"; 
-import "package:postapp/style/app_style.dart";
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:postapp/style/app_style.dart';
 
 // Функция для "умного" форматирования даты
 String _formatSmartDate(DateTime date) {
   final now = DateTime.now();
   final localDate = date.toLocal();
-  
-  if (now.year == localDate.year && now.month == localDate.month && now.day == localDate.day) {
-    return DateFormat('HH:mm').format(localDate); 
+
+  if (now.year == localDate.year &&
+      now.month == localDate.month &&
+      now.day == localDate.day) {
+    return DateFormat('HH:mm').format(localDate);
   } else if (now.year == localDate.year && now.month == localDate.month) {
-    return DateFormat.MMMd('ru_RU').format(localDate); 
+    return DateFormat.MMMd('ru_RU').format(localDate);
   } else {
     return DateFormat.yMMMd('ru_RU').format(localDate);
   }
 }
 
-
-Widget noteCard(Function()? onTap, QueryDocumentSnapshot doc){
-  
-
-  dynamic dateData = doc["creation_date"];
+// noteCard для Supabase
+Widget noteCard(Function()? onTap, Map<String, dynamic> doc) {
+  // Дата создания
   DateTime creationDate;
+  final dateData = doc['creation_date'];
 
   if (dateData is String) {
     try {
-      final format = DateFormat("MMMM d, yyyy HH:mm:ss");
-      creationDate = format.parse(dateData);
+      creationDate = DateTime.parse(dateData);
     } catch (e) {
- 
-      debugPrint("Error parsing date string in noteCard: $e"); 
+      debugPrint("Error parsing creation_date: $e");
       creationDate = DateTime.now();
     }
-  } else if (dateData is Timestamp) {
-    creationDate = dateData.toDate();
+  } else if (dateData is DateTime) {
+    creationDate = dateData;
   } else {
-    creationDate = DateTime.now(); 
+    creationDate = DateTime.now();
   }
-  
-  String formattedDate = _formatSmartDate(creationDate);
- 
 
+  final formattedDate = _formatSmartDate(creationDate);
+
+  // Дата напоминания
+  DateTime? reminderDate;
+  if (doc.containsKey('reminder_date') && doc['reminder_date'] != null) {
+    try {
+      reminderDate = DateTime.parse(doc['reminder_date']);
+    } catch (e) {
+      debugPrint("Error parsing reminder_date: $e");
+    }
+  }
 
   return InkWell(
     onTap: onTap,
@@ -52,30 +58,47 @@ Widget noteCard(Function()? onTap, QueryDocumentSnapshot doc){
         color: AppStyle.cardsColor[doc['color_id']],
         borderRadius: BorderRadius.circular(8.0),
       ),
-      child: Column( 
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [ 
-          
-          
+        children: [
           Text(
-            doc["note_title"], 
+            doc['note_title'] ?? '',
             style: AppStyle.mainTitle,
             overflow: TextOverflow.ellipsis,
-          ), 
-          
-          const SizedBox(height: 4.0,),
+          ),
+          const SizedBox(height: 4.0),
           Text(
             formattedDate,
             style: AppStyle.dateTitle,
           ),
-          const SizedBox(height: 8.0,),
+          if (reminderDate != null) ...[
+            const SizedBox(height: 4.0),
+            Row(
+              children: [
+                const Icon(
+                  Icons.notifications_active,
+                  size: 14,
+                  color: Colors.orange,
+                ),
+                const SizedBox(width: 4.0),
+                Text(
+                  DateFormat('dd.MM.yyyy HH:mm', 'ru_RU').format(reminderDate),
+                  style: AppStyle.dateTitle.copyWith(
+                    color: Colors.orange.shade700,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 8.0),
           Text(
-            doc["note_content"],
+            doc['note_content'] ?? '',
             style: AppStyle.mainContent,
             overflow: TextOverflow.ellipsis,
             maxLines: 4,
-          )
-        ], 
+          ),
+        ],
       ),
     ),
   );

@@ -1,8 +1,7 @@
 import 'dart:io';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:postapp/services/auth_check.dart';
 import 'package:postapp/style/app_style.dart';
 
@@ -14,9 +13,17 @@ class AccountScreen extends StatefulWidget {
 }
 
 class _AccountScreenState extends State<AccountScreen> {
-  final user = FirebaseAuth.instance.currentUser;
+  final supabase = Supabase.instance.client;
+  User? user;
   File? _image;
   final ImagePicker _picker = ImagePicker();
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    user = supabase.auth.currentUser;
+  }
 
   Future<void> _pickImage() async {
     final XFile? pickedFile =
@@ -31,92 +38,146 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   Future<void> _uploadImage() async {
-    if (_image != null && user != null) {
-      try {
-        // Загрузка изображения в Firebase Storage
-        String filePath = 'profile_images/${user!.uid}.png';
-        Reference storageReference =
-            FirebaseStorage.instance.ref().child(filePath);
-        UploadTask uploadTask = storageReference.putFile(_image!);
-        TaskSnapshot taskSnapshot = await uploadTask.whenComplete(() => null);
+    if (_image == null || user == null) return;
 
-        // Получение URL загруженного изображения
-        String photoUrl = await taskSnapshot.ref.getDownloadURL();
+    setState(() => _isLoading = true);
 
-        // Обновление профиля пользователя
-        await user!.updatePhotoURL(photoUrl);
+    try {
+      final bytes = await _image!.readAsBytes();
+      final filePath = 'profile_images/${user!.id}.png';
 
-        // Обновление UI
-        setState(() {
-          // UI автоматически обновится, так как мы уже вызвали setState
-        });
+      //print('User ID: ${user!.id}');
+      //print('Uploading to path: $filePath');
 
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Profile photo updated!')));
-      } catch (e) {
+      // Загружаем изображение в Supabase Storage
+      await supabase.storage.from('avatars').uploadBinary(
+            filePath,
+            bytes,
+            fileOptions: const FileOptions(
+              upsert: true,
+              contentType: 'image/png',
+            ),
+          );
+
+      //print('Upload successful');
+
+      // Генерируем публичный URL
+      final publicUrl = supabase.storage.from('avatars').getPublicUrl(filePath);
+
+      //print('Public URL: $publicUrl');
+
+      // Обновляем профиль пользователя
+      await supabase.auth.updateUser(UserAttributes(
+        data: {'avatar_url': publicUrl},
+      ));
+
+      // ВАЖНО: Получаем обновленного пользователя ДО вызова setState
+      final updatedUser = supabase.auth.currentUser;
+
+      // Принудительно обновляем UI
+      setState(() {
+        user = updatedUser;
+        _image = null; // Очищаем временное изображение
+      });
+
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to upload image: $e')) );
+          const SnackBar(content: Text('Profile photo updated!')),
+        );
+      }
+    } catch (e) {
+      //print('Upload error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to upload image: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
   }
 
   Future<void> signOut() async {
-    final navigator = Navigator.of(context);
-    await FirebaseAuth.instance.signOut();
-
-    //navigator.pushNamedAndRemoveUntil('/home', (Route<dynamic> route) => false);
-    navigator.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const AuthCheck()),
-      (Route<dynamic> route) => false,
-    );
+    await supabase.auth.signOut();
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const AuthCheck()),
+        (route) => false,
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final avatarUrl = user?.userMetadata?['avatar_url'] as String?;
+    // Добавляем timestamp к URL чтобы избежать кеширования
+    final avatarUrlWithCache = avatarUrl != null 
+        ? '$avatarUrl?t=${DateTime.now().millisecondsSinceEpoch}' 
+        : null;
+
     return Scaffold(
-      
       resizeToAvoidBottomInset: false,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        // leading: IconButton(
-        //   onPressed: () {
-        //     Navigator.pop(context);
-        //   },
-        //   icon: const Icon(
-        //     Icons.arrow_back_ios, // add custom icons also
-        //   ),
-        // ),
         title: const Text('Account'),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Logout',
-            onPressed: () => signOut(),
+            onPressed: signOut,
           ),
         ],
       ),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            GestureDetector(
-              onTap: _pickImage, // Открываем галерею по нажатию на аватар
-              child: CircleAvatar(
-                radius: 70,
-                backgroundImage: user?.photoURL != null
-                    ? NetworkImage(user!.photoURL!)
-                    : const AssetImage('assets/images/placeholder.png')
-                        as ImageProvider,
+        child: _isLoading
+            ? const CircularProgressIndicator()
+            : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  GestureDetector(
+                    onTap: _pickImage,
+                    child: Stack(
+                      children: [
+                        CircleAvatar(
+                          radius: 70,
+                          backgroundImage: avatarUrlWithCache != null
+                              ? NetworkImage(avatarUrlWithCache)
+                              : const AssetImage('assets/images/placeholder.png')
+                                  as ImageProvider,
+                          // Добавляем ключ для принудительного обновления
+                          key: ValueKey(avatarUrlWithCache),
+                        ),
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).primaryColor,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.camera_alt,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text('Your e-mail: ${user?.email}', style: AppStyle.mainContent),
+                  const SizedBox(height: 20),
+                  TextButton(
+                    onPressed: signOut,
+                    child: Text('Exit', style: AppStyle.mainContent),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 20),
-            Text('Your e-mail: ${user?.email}',style:(AppStyle.mainContent)),
-            TextButton(
-              onPressed: () => signOut(),
-              child:  Text('Exit',style:(AppStyle.mainContent)),
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -1,7 +1,6 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:postapp/screens/account_screen.dart';
 import 'package:postapp/screens/login_screen.dart';
 import 'package:postapp/screens/note_editor.dart';
@@ -17,18 +16,16 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  User? user = FirebaseAuth.instance.currentUser;
+  final supabase = Supabase.instance.client;
   int _currentIndex = 0;
-
-  // Определяем список виджетов для страниц, на которые будем переключаться
-  final List<Widget> _pages = [
-    const HomeContentScreen(), // Основной контент домашней страницы
-    const NoteEditorScreen(),
-    const AccountScreen(),     // Страница аккаунта
-  ];
+  
+  // Глобальный ключ для сохранения состояния HomeContentScreen
+  final GlobalKey<_HomeContentScreenState> _homeKey = GlobalKey<_HomeContentScreenState>();
 
   @override
   Widget build(BuildContext context) {
+    final user = supabase.auth.currentUser;
+
     return Scaffold(
       backgroundColor: AppStyle.mainColor,
       appBar: AppBar(
@@ -46,11 +43,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   MaterialPageRoute(builder: (context) => const LoginScreen()),
                 );
               } else {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const AccountScreen()),
-                );
+                setState(() {
+                  _currentIndex = 2;
+                });
               }
             },
             icon: Icon(
@@ -60,15 +55,22 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-
-      body: _pages[_currentIndex], // Показываем текущую выбранную страницу
-
+      body: IndexedStack(
+        index: _currentIndex,
+        children: [
+          HomeContentScreen(key: _homeKey, userId: user?.id),
+          const NoteEditorScreen(),
+          const AccountScreen(),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
+          setState(() => _currentIndex = index);
+          // Обновляем список при возврате на главную
+          if (index == 0) {
+            _homeKey.currentState?._refreshNotes();
+          }
         },
         items: const [
           BottomNavigationBarItem(
@@ -77,42 +79,56 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.add),
-            label: 'Add',),
+            label: 'Add',
+          ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person),
             label: 'Account',
           ),
         ],
       ),
-
-    //   floatingActionButton: _currentIndex == 0
-    //       ? FloatingActionButton.extended(
-    //           onPressed: () {
-    //             Navigator.push(
-    //                 context,
-    //                 MaterialPageRoute(
-    //                     builder: (context) => const NoteEditorScreen()));
-    //           },
-    //           label: const Text("Add Note"),
-    //           icon: const Icon(Icons.add),
-    //         )
-    //       : null, // Отображаем кнопку только на главной странице
-    // );
-  );}
+    );
+  }
 }
 
-class HomeContentScreen extends StatelessWidget {
-  const HomeContentScreen({super.key});
+class HomeContentScreen extends StatefulWidget {
+  final String? userId;
+
+  const HomeContentScreen({super.key, this.userId});
+
+  @override
+  State<HomeContentScreen> createState() => _HomeContentScreenState();
+}
+
+class _HomeContentScreenState extends State<HomeContentScreen> {
+  final supabase = Supabase.instance.client;
+  
+  // Ключ для принудительного обновления StreamBuilder
+  int _refreshKey = 0;
+
+  void _refreshNotes() {
+    if (mounted) {
+      setState(() {
+        _refreshKey++;
+        print('🔄 Обновление списка заметок (key: $_refreshKey)');
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    User? user = FirebaseAuth.instance.currentUser;
+    if (widget.userId == null) {
+      return Center(
+        child: Text(
+          "Please login to see your notes",
+          style: GoogleFonts.nunito(color: Colors.white, fontSize: 18),
+        ),
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Center(
             child: Text(
@@ -124,40 +140,72 @@ class HomeContentScreen extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(
-            height: 20,
-          ),
+          const SizedBox(height: 20),
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection(user!.uid)
-                  .orderBy('creation_date', descending: true)
-                  .snapshots(),
-              builder: (context, AsyncSnapshot<QuerySnapshot> snapshot) {
+            child: StreamBuilder<List<Map<String, dynamic>>>(
+              key: ValueKey(_refreshKey),
+              stream: supabase
+                  .from('notes')
+                  .stream(primaryKey: ['id'])
+                  .eq('user_id', widget.userId!)
+                  .order('creation_date', ascending: false),
+              builder: (context, snapshot) {
+                print('📡 StreamBuilder состояние: ${snapshot.connectionState}');
+                print('📊 Количество заметок: ${snapshot.data?.length ?? 0}');
+                
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(),
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      "Error: ${snapshot.error}",
+                      style: GoogleFonts.nunito(color: Colors.red, fontSize: 16),
+                    ),
                   );
                 }
-                if (snapshot.hasData) {
-                  return GridView(
+
+                if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                  final notes = snapshot.data!;
+                  return GridView.builder(
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2),
-                    children: snapshot.data!.docs
-                        .map((note) => noteCard(() {
-                              Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        NoteReaderScreen(note),
-                                  ));
-                            }, note))
-                        .toList(),
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                    ),
+                    itemCount: notes.length,
+                    itemBuilder: (context, index) {
+                      final note = notes[index];
+                      return noteCard(
+                        () async {
+                          print('📝 Открываем заметку: ${note['note_title']}');
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => NoteReaderScreen(note),
+                            ),
+                          );
+                          
+                          print('↩️ Вернулись из NoteReader, result: $result');
+                          
+                          // Если вернулось true (заметка была удалена), обновляем список
+                          if (result == true) {
+                            print('✅ Заметка была удалена, обновляем список');
+                            _refreshNotes();
+                          }
+                        },
+                        note,
+                      );
+                    },
                   );
                 }
-                return Text(
-                  "Sorry, no Notes",
-                  style: GoogleFonts.nunito(color: Colors.white),
+
+                return Center(
+                  child: Text(
+                    "Sorry, no Notes",
+                    style: GoogleFonts.nunito(color: Colors.white, fontSize: 16),
+                  ),
                 );
               },
             ),

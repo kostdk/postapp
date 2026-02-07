@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:email_validator/email_validator.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:postapp/screens/home_screen.dart';
 import 'package:postapp/screens/reset_password_screen.dart';
 import 'package:postapp/screens/signup_screen.dart';
@@ -19,12 +19,12 @@ class _LoginScreenState extends State<LoginScreen> {
   TextEditingController emailTextInputController = TextEditingController();
   TextEditingController passwordTextInputController = TextEditingController();
   final formKey = GlobalKey<FormState>();
+  final supabase = Supabase.instance.client;
 
   @override
   void dispose() {
     emailTextInputController.dispose();
     passwordTextInputController.dispose();
-
     super.dispose();
   }
 
@@ -41,31 +41,42 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!isValid) return;
 
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      // Вход через Supabase
+      final response = await supabase.auth.signInWithPassword(
         email: emailTextInputController.text.trim(),
         password: passwordTextInputController.text.trim(),
       );
-    } on FirebaseAuthException catch (e) {
-      print(e.code);
 
-      if (e.code == 'user-not-found' || e.code == 'wrong-password') {
+      // Проверка, что пользователь существует и e-mail подтверждён
+      if (response.user == null) {
         SnackBarService.showSnackBar(
           context,
-          'Wrong e-mail or password. Try again',
-          true,
-        );
-        return;
-      } else {
-        SnackBarService.showSnackBar(
-          context,
-          'Unknown erroe! Try again or tell us',
+          'User not found or incorrect credentials',
           true,
         );
         return;
       }
-    }
 
-    navigator.push(MaterialPageRoute(builder: (context)=> const HomeScreen()));
+      // Успешный вход → переход на HomeScreen
+      navigator.pushReplacement(
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+      );
+
+    } on AuthException catch (e) {
+      // Обработка ошибок Supabase
+      SnackBarService.showSnackBar(
+        context,
+        e.message,
+        true,
+      );
+    } catch (e) {
+      // Любые другие ошибки
+      SnackBarService.showSnackBar(
+        context,
+        'Unknown error! Try again.',
+        true,
+      );
+    }
   }
 
   @override
@@ -74,7 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       resizeToAvoidBottomInset: false,
       appBar: AppBar(
-        title: Text('Sign in',style:(AppStyle.mainTitle)),
+        title: Text('Sign in', style: AppStyle.mainTitle),
       ),
       body: Padding(
         padding: const EdgeInsets.all(30.0),
@@ -100,9 +111,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 autocorrect: false,
                 controller: passwordTextInputController,
                 obscureText: isHiddenPassword,
-                validator: (value) => value != null && value.length < 6
-                    ? 'Min 6 symbols'
-                    : null,
+                validator: (value) =>
+                    value != null && value.length < 6 ? 'Min 6 symbols' : null,
                 autovalidateMode: AutovalidateMode.onUserInteraction,
                 decoration: InputDecoration(
                   border: const OutlineInputBorder(),
@@ -121,21 +131,25 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 30),
               ElevatedButton(
                 onPressed: login,
-                child: Center(child: Text('Sign in',style:(AppStyle.mainContent))),
+                child: Center(
+                    child: Text('Sign in', style: AppStyle.mainContent)),
               ),
               const SizedBox(height: 30),
               TextButton(
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (context)=> const SignUpScreen())),
+                onPressed: () => navigator.push(
+                  MaterialPageRoute(builder: (context) => const SignUpScreen()),
+                ),
                 child: Text(
                   'Register',
-                  style:(AppStyle.mainContent)
-                  ),
+                  style: AppStyle.mainContent,
                 ),
-              
+              ),
               TextButton(
-                onPressed: () =>
-                  navigator.push(MaterialPageRoute(builder: (context)=> const ResetPasswordScreen())),
-                child: Text('Reset password',style:(AppStyle.mainContent)),
+                onPressed: () => navigator.push(
+                  MaterialPageRoute(
+                      builder: (context) => const ResetPasswordScreen()),
+                ),
+                child: Text('Reset password', style: AppStyle.mainContent),
               ),
             ],
           ),
